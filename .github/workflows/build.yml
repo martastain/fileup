@@ -1,0 +1,95 @@
+name: Rust Build and Release
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  extract-version:
+    runs-on: ubuntu-latest
+    outputs:
+      cargo_version: ${{ steps.vinfo.outputs.CARGO_VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract version from Cargo.toml
+        id: vinfo
+        run: echo "CARGO_VERSION=$(grep '^version' Cargo.toml | sed 's/version = "\(.*\)"/\1/' | xargs)" >> "$GITHUB_OUTPUT"
+
+  build-linux:
+    runs-on: ubuntu-20.04
+    outputs:
+      artifact-name: ${{ steps.set-artifact-name.outputs.artifact-name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: x86_64-unknown-linux-gnu
+          override: true
+
+      - name: Build
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: fileup-linux
+          path: target/x86_64-unknown-linux-gnu/release/fileup
+
+
+  build-windows:
+    runs-on: windows-latest
+    outputs:
+      artifact-name: ${{ steps.set-artifact-name.outputs.artifact-name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: x86_64-pc-windows-msvc
+          override: true
+
+      - name: Build
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: fileup-windows
+          path: target/x86_64-pc-windows-msvc/release/fileup.exe
+
+
+  create-release:
+    needs: [build-linux, build-windows, extract-version]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Linux binary artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: fileup-linux
+          path: ./artifacts/linux
+
+      - name: Download Windows binary artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: fileup-windows
+          path: ./artifacts/windows
+
+      - name: Create and Upload Release
+        uses: ncipollo/release-action@v1
+        env:
+          CARGO_VERSION: ${{ needs.extract-version.outputs.cargo_version }}
+
+        with:
+          artifacts: |
+            artifacts/linux/fileup
+            artifacts/windows/fileup.exe
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: $CARGO_VERSION
+          name: fileup $CARGO_VERSION

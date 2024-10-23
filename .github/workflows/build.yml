@@ -62,6 +62,8 @@ jobs:
   create-release:
     needs: [build-linux, build-windows, extract-version]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download Linux binary artifact
         uses: actions/download-artifact@v4
